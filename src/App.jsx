@@ -11,8 +11,6 @@ const API_BASE   = "https://api.sokoview.co.tz";
 const API_KEY    = "skv_live_ef0939a5eb133b5ec5620df82b5be6caa48c49723211be72";
 
 // Mansa Markets — real DSE historical OHLCV data
-const MANSA_BASE = "https://www.mansaapi.com";
-const MANSA_KEY  = "mansa_live_sk_q965e9cwd6wme25m";
 
 const DOT  = " \u00B7 ";
 const ARR  = " \u2192 ";
@@ -79,19 +77,16 @@ async function fetchAllStocks() {
 }
 
 // ── Price service ─────────────────────────────────────────────
-// Fetch real historical prices from Mansa Markets (mansaapi.com)
-// Returns [{ date, price, open, high, low, volume }] oldest first
+// Fetch real historical prices via Netlify proxy function
+// The function calls Mansa Markets server-side (avoids CORS)
 async function fetchHistoricalPrices(symbol, startDate) {
-  var url = MANSA_BASE + "/api/v1/markets/exchanges/DSE/stocks/" + symbol.toUpperCase() + "/history";
-  var res = await fetch(url + "?from=" + startDate, {
-    headers: { "Authorization": "Bearer " + MANSA_KEY, "Accept": "application/json" }
-  });
-  if (!res.ok) throw new Error("Mansa " + res.status + " for " + symbol);
-  var json = await res.json();
-  if (!json.success || !Array.isArray(json.history)) throw new Error("Bad response from Mansa");
-  return json.history.map(function(h) {
-    return { date: h.date, price: h.close };
-  });
+  var url = "/.netlify/functions/history?symbol=" + symbol.toUpperCase() + "&from=" + startDate;
+  var res = await fetch(url);
+  if (!res.ok) throw new Error("History proxy error " + res.status + " for " + symbol);
+  var data = await res.json();
+  if (!Array.isArray(data)) throw new Error("Bad response from history proxy");
+  if (data.length < 5) throw new Error("Too few data points for " + symbol);
+  return data; // already [{ date, price }]
 }
 
 // Fallback simulation (used if Mansa call fails or returns no data)
