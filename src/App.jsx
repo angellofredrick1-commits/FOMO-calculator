@@ -41,29 +41,7 @@ async function fetchCompanies() {
 }
 
 // Fetch all stocks with live prices — used to populate the stock selector
-// Falls back to DSE_STOCKS if API unavailable
-async function fetchAllStocks() {
-  try {
-    var res = await fetch("/.netlify/functions/prices");
-    if (!res.ok) return null;
-    var data = await res.json();
-    return data
-      .filter(function(s) { return s.price && s.price > 0; })
-      .map(function(s) {
-        return {
-          symbol: s.symbol,
-          name: s.name || s.symbol,
-          sector: "DSE",
-          price: s.price,
-          change: s.change,
-          percentageChange: s.percentageChange,
-        };
-      });
-  } catch(e) {
-    console.warn("fetchAllStocks failed:", e.message);
-    return null;
-  }
-}
+
 
 // ── Price service ─────────────────────────────────────────────
 // Fetch real historical prices from DSE official API via Netlify proxy
@@ -886,7 +864,7 @@ export default function App() {
   var [phase,      setPhase]      = useState("setup");
   var [storyData,  setStoryData]  = useState(null);
   var [error,      setError]      = useState(null);
-  var [stocks,     setStocks]     = useState(DSE_STOCKS);
+  var stocks = DSE_STOCKS; // fixed to 4 banks
   var [livePrice,  setLivePrice]  = useState(null);
 
   // Fetch live price for default ticker on mount
@@ -898,9 +876,11 @@ export default function App() {
 
   // Update live price when ticker changes
   useEffect(function() {
-    var current = stocks.find(function(s) { return s.symbol === ticker; });
-    setLivePrice(current && current.price ? current : null);
-  }, [ticker, stocks]);
+    fetchLivePrice(ticker).then(function(data) {
+      if (data && data.price) setLivePrice(data);
+      else setLivePrice(null);
+    });
+  }, [ticker]);
 
   var selectedStock = stocks.find(function(s){return s.symbol===ticker;}) || stocks[0] || DSE_STOCKS[0];
   var filtered = stocks.filter(function(s){
