@@ -420,9 +420,10 @@ function StoryPlayer(props) {
   },[cur,isLast,advance]);
 
   function handleTap(e){
-    if(isLast)return;
     var x=e.clientX||(e.touches&&e.touches[0]?e.touches[0].clientX:0);
-    if(x<e.currentTarget.offsetWidth*.35)goBack(); else advance();
+    // Allow going back from last slide, but not forward
+    if(x<e.currentTarget.offsetWidth*.35){goBack();return;}
+    if(!isLast)advance();
   }
 
   var slide=SLIDES[cur];
@@ -434,38 +435,46 @@ function StoryPlayer(props) {
   var compItems=Math.floor(data.gain/data.comparison.price);
 
   function downloadCard(){
-    var cardEl=document.getElementById("fomo-card-render");
-    if(!cardEl){console.warn("card element not found");return;}
     if(typeof window.html2canvas==="undefined"){
-      // Fallback: download HTML if html2canvas not loaded
-      var blob=new Blob([html],{type:"text/html"});
-      var url=URL.createObjectURL(blob);
-      var a=document.createElement("a");
-      a.href=url;a.download="sokoview-fomo-"+data.ticker+".html";a.click();
-      URL.revokeObjectURL(url);
+      alert("PNG export loading, please try again in a moment.");
       return;
     }
-    window.html2canvas(cardEl,{
-      scale:2,
-      useCORS:true,
-      backgroundColor:"#ffffff",
-      width:375,
-      logging:false,
-    }).then(function(canvas){
-      var url=canvas.toDataURL("image/png");
-      var a=document.createElement("a");
-      a.href=url;
-      a.download="sokoview-fomo-"+data.ticker+"-"+data.startDate.slice(0,7)+".png";
-      a.click();
-    }).catch(function(e){
-      console.warn("html2canvas failed:",e.message);
-      // Fallback to HTML
-      var blob=new Blob([html],{type:"text/html"});
-      var url=URL.createObjectURL(blob);
-      var a=document.createElement("a");
-      a.href=url;a.download="sokoview-fomo-"+data.ticker+".html";a.click();
-      URL.revokeObjectURL(url);
-    });
+    // Create a temporary off-screen container at full size
+    var container=document.createElement("div");
+    container.style.cssText="position:fixed;left:-9999px;top:0;width:375px;background:#fff;z-index:-1;";
+    document.body.appendChild(container);
+
+    // Render card HTML into container
+    container.innerHTML=html;
+
+    // Wait a frame for fonts/layout
+    setTimeout(function(){
+      window.html2canvas(container,{
+        scale:3,
+        useCORS:true,
+        allowTaint:true,
+        backgroundColor:"#ffffff",
+        width:375,
+        logging:false,
+      }).then(function(canvas){
+        document.body.removeChild(container);
+        var url=canvas.toDataURL("image/png");
+        var a=document.createElement("a");
+        a.href=url;
+        a.download="sokoview-fomo-"+data.ticker+"-"+data.startDate.slice(0,7)+".png";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }).catch(function(e){
+        document.body.removeChild(container);
+        console.warn("html2canvas failed:",e.message);
+        var blob=new Blob([html],{type:"text/html"});
+        var url=URL.createObjectURL(blob);
+        var a=document.createElement("a");
+        a.href=url;a.download="sokoview-fomo-"+data.ticker+".html";a.click();
+        URL.revokeObjectURL(url);
+      });
+    },300);
   }
   function copyLink(){
     navigator.clipboard.writeText(window.location.href).then(function(){
@@ -513,7 +522,7 @@ function StoryPlayer(props) {
             <div style={{fontSize:13,color:G.muted,marginBottom:8}}>You had</div>
             <div style={{fontSize:68,fontWeight:800,color:G.black,
               letterSpacing:"-3.5px",lineHeight:1}}>
-              TZS {fmtS(data.invested)}
+              TZS {fmtS(data.amount)}
             </div>
             <div style={{fontSize:15,color:G.muted,marginTop:12,lineHeight:1.5}}>
               just sitting pretty
@@ -544,7 +553,7 @@ function StoryPlayer(props) {
           <div style={{textAlign:"center",width:"100%"}}>
             <div style={{fontSize:11,fontWeight:600,color:G.muted,
               letterSpacing:".08em",textTransform:"uppercase",marginBottom:14}}>
-              Your TZS {fmtS(data.invested)} could have bought
+              Your TZS {fmtS(data.amount)} could have bought
             </div>
             <div style={{fontSize:72,fontWeight:800,color:G.black,
               letterSpacing:"-4px",lineHeight:1}}>
@@ -590,17 +599,21 @@ function StoryPlayer(props) {
           <div style={{width:"100%",height:"100%",display:"flex",
             flexDirection:"column"}} onClick={function(e){e.stopPropagation();}}>
 
-            {/* Card preview — rendered as real DOM for html2canvas */}
+            {/* Card preview */}
             <div style={{flex:1,display:"flex",alignItems:"center",
               justifyContent:"center",overflow:"hidden",minHeight:0,padding:"4px 0"}}>
               <div style={{
                 boxShadow:"0 8px 32px rgba(0,0,0,.12)",
                 overflow:"hidden",
-                transformOrigin:"top center",
-                transform:"scale("+Math.min(1,300/375)+")",
-                marginBottom:-(390*(1-Math.min(1,300/375)))+"px",
+                width:"100%",maxWidth:320,
               }}>
-                <CardPreview data={data}/>
+                <iframe srcDoc={html} title="Share card" scrolling="no"
+                  style={{
+                    width:375,height:400,border:"none",display:"block",
+                    transform:"scale("+Math.min(1,300/375)+")",
+                    transformOrigin:"top left",
+                    marginBottom:-(400*(1-Math.min(1,300/375)))+"px",
+                  }}/>
               </div>
             </div>
 
